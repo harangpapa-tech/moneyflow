@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: Python 설정
         uses: actions/setup-python@v4
@@ -17,7 +19,7 @@ jobs:
           python-version: '3.11'
 
       - name: 패키지 설치
-        run: pip install requests beautifulsoup4
+        run: pip install requests
 
       - name: 데이터 수집
         env:
@@ -30,5 +32,4 @@ jobs:
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
           git add -A
-          git diff --staged --quiet || git commit -m "자동 데이터 업데이트"
-          git push
+          git diff --staged --quiet || (git pull --rebase && git commit -m "자동 데이터 업데이트" && git push)
