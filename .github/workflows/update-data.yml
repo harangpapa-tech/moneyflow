@@ -1,4 +1,4 @@
-name: 매일 주식 ?�이???�데?�트
+name: 매일 주식 데이터 업데이트
 
 on:
   schedule:
@@ -11,24 +11,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Python ?�정
+      - name: Python 설정
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: ?�키지 ?�치
+      - name: 패키지 설치
         run: pip install requests
 
-      - name: ?�이???�집
+      - name: 데이터 수집
         env:
           KIS_APP_KEY: ${{ secrets.KIS_APP_KEY }}
           KIS_APP_SECRET: ${{ secrets.KIS_APP_SECRET }}
         run: python collector.py
 
-      - name: 변경사???�??
+      - name: 변경사항 저장
         run: |
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
-          git add -A
-          git diff --staged --quiet || git commit -m "?�동 ?�이???�데?�트"
+          git add data.json
+          git diff --staged --quiet || git commit -m "자동 데이터 업데이트"
           git push --force origin main
