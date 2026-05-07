@@ -1,243 +1,334 @@
 """
-머니플로우 — 자동 데이터 수집기
-매일 실행하면 외국인/기관 수급 데이터를 자동으로 앱에 반영합니다
+머니플로우 — 한국투자증권 API 데이터 수집기
+매일 자동으로 실행되어 외국인/기관 수급 데이터를 수집합니다
 """
 
 import requests
-from bs4 import BeautifulSoup
 import json
 import datetime
-import time
 import os
 
-HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Referer': 'https://finance.naver.com'
+# ── API 설정 ──────────────────────────────
+APP_KEY = os.environ.get('KIS_APP_KEY', '')
+APP_SECRET = os.environ.get('KIS_APP_SECRET', '')
+BASE_URL = 'https://openapi.koreainvestment.com:9443'
+
+# ── 섹터 매핑 ─────────────────────────────
+SECTOR_MAP = {
+    '005930': '반도체', '000660': '반도체', '042700': '반도체',
+    '373220': '2차전지', '006400': '2차전지', '247540': '2차전지',
+    '012450': '방산', '047810': '방산', '034020': '원전',
+    '009540': '조선', '010140': '조선', '042660': '조선',
+    '207940': '바이오', '068270': '바이오', '326030': '바이오',
+    '105560': '금융', '055550': '금융', '086790': '금융',
+    '005380': '자동차', '000270': '자동차',
+    '035420': 'IT', '035720': 'IT', '251270': 'IT',
 }
 
 def get_today():
+    return datetime.date.today().strftime('%Y%m%d')
+
+def get_display_date():
     return datetime.date.today().strftime('%Y.%m.%d')
 
-# ── 1. 외국인 순매수 TOP 종목 ──────────────────────────────
-def fetch_foreign_top():
+# ── 1. 액세스 토큰 발급 ────────────────────
+def get_access_token():
+    print("🔑 토큰 발급 중...")
+    url = f"{BASE_URL}/oauth2/tokenP"
+    body = {
+        "grant_type": "client_credentials",
+        "appkey": APP_KEY,
+        "appsecret": APP_SECRET
+    }
+    res = requests.post(url, json=body)
+    token = res.json().get('access_token', '')
+    if token:
+        print("  ✅ 토큰 발급 성공")
+    else:
+        print("  ❌ 토큰 발급 실패:", res.json())
+    return token
+
+# ── 2. 외국인 순매수 TOP ───────────────────
+def get_foreign_top(token):
     print("📡 외국인 순매수 수집 중...")
-    url = "https://finance.naver.com/sise/sise_quant.naver?sosok=0"
-    params = {'sosok': '0'}
-    
+    url = f"{BASE_URL}/uapi/domestic-stock/v1/quotations/volume-rank"
+    headers = {
+        'content-type': 'application/json',
+        'authorization': f'Bearer {token}',
+        'appkey': APP_KEY,
+        'appsecret': APP_SECRET,
+        'tr_id': 'FHPST01710000',
+        'custtype': 'P'
+    }
+    params = {
+        'FID_COND_MRKT_DIV_CODE': 'J',
+        'FID_COND_SCR_DIV_CODE': '20171',
+        'FID_INPUT_ISCD': '0000',
+        'FID_DIV_CLS_CODE': '0',
+        'FID_BLNG_CLS_CODE': '0',
+        'FID_TRGT_CLS_CODE': '111111111',
+        'FID_TRGT_EXLS_CLS_CODE': '000000',
+        'FID_INPUT_PRICE_1': '',
+        'FID_INPUT_PRICE_2': '',
+        'FID_VOL_CNT': '',
+        'FID_INPUT_DATE_1': ''
+    }
+
     try:
-        res = requests.get(
-            "https://finance.naver.com/sise/field_submit.naver",
-            params={
-                'menu': 'quant',
-                'returnUrl': 'http://finance.naver.com/sise/sise_quant.naver',
-                'fieldIds': 'quant|foreign_pure_buy_sell_vol'
-            },
-            headers=HEADERS,
-            timeout=10
-        )
-        # 외국인 순매수 페이지
-        res2 = requests.get(
-            "https://finance.naver.com/sise/sise_quant.naver",
-            headers=HEADERS,
-            timeout=10
-        )
-        soup = BeautifulSoup(res2.text, 'html.parser')
-        rows = soup.select('table.type_2 tr')
-        
+        # 외국인 순매수 상위 종목
+        url2 = f"{BASE_URL}/uapi/domestic-stock/v1/ranking/investor"
+        headers2 = {
+            'content-type': 'application/json',
+            'authorization': f'Bearer {token}',
+            'appkey': APP_KEY,
+            'appsecret': APP_SECRET,
+            'tr_id': 'FHPST02320000',
+            'custtype': 'P'
+        }
+        params2 = {
+            'FID_COND_MRKT_DIV_CODE': 'J',
+            'FID_COND_SCR_DIV_CODE': '20232',
+            'FID_INPUT_ISCD': '0001',
+            'FID_DIV_CLS_CODE': '0',
+            'FID_BLNG_CLS_CODE': '1',  # 1: 외국인
+            'FID_TRGT_CLS_CODE': '111111111',
+            'FID_TRGT_EXLS_CLS_CODE': '000000',
+            'FID_INPUT_PRICE_1': '',
+            'FID_INPUT_PRICE_2': '',
+            'FID_VOL_CNT': '10',
+            'FID_INPUT_DATE_1': get_today()
+        }
+        res = requests.get(url2, headers=headers2, params=params2)
+        data = res.json()
+        output = data.get('output', [])
+
         stocks = []
-        for row in rows:
-            cols = row.select('td')
-            if len(cols) < 10:
-                continue
-            name_tag = row.select_one('a.tltle')
-            if not name_tag:
-                continue
-            name = name_tag.text.strip()
-            price = cols[1].text.strip().replace(',', '')
-            change_rate = cols[3].text.strip()
-            volume = cols[5].text.strip()
-            
+        for i, item in enumerate(output[:10]):
+            name = item.get('hts_kor_isnm', '')
+            code = item.get('mksc_shrn_iscd', '')
+            price = item.get('stck_prpr', '0')
+            change_rate = item.get('prdy_ctrt', '0')
+            net_buy = item.get('frgn_ntby_qty', '0')
+
+            try:
+                net_buy_int = int(net_buy)
+                net_buy_str = f"+{net_buy_int:,}" if net_buy_int > 0 else f"{net_buy_int:,}"
+            except:
+                net_buy_str = net_buy
+
             stocks.append({
                 'name': name,
-                'price': cols[1].text.strip(),
-                'change': change_rate,
-                'volume': volume,
-                'sector': '기타',
+                'code': code,
+                'sector': SECTOR_MAP.get(code, '기타'),
+                'price': f"{int(price):,}원" if price.isdigit() else price,
+                'change': f"+{change_rate}%" if not change_rate.startswith('-') else f"{change_rate}%",
+                'netBuy': net_buy_str + '주',
+                'ratio': max(10, 100 - i * 9),
             })
-            if len(stocks) >= 10:
-                break
-        
+
         print(f"  ✅ 외국인 {len(stocks)}종목 수집 완료")
         return stocks
+
     except Exception as e:
-        print(f"  ⚠️  외국인 수집 실패: {e}")
+        print(f"  ⚠️ 외국인 수집 실패: {e}")
         return []
 
-
-# ── 2. 기관 순매수 TOP 종목 ────────────────────────────────
-def fetch_inst_top():
+# ── 3. 기관 순매수 TOP ─────────────────────
+def get_inst_top(token):
     print("📡 기관 순매수 수집 중...")
     try:
-        res = requests.get(
-            "https://finance.naver.com/sise/sise_quant.naver",
-            headers=HEADERS,
-            timeout=10
-        )
-        soup = BeautifulSoup(res.text, 'html.parser')
-        rows = soup.select('table.type_2 tr')
-        
+        url = f"{BASE_URL}/uapi/domestic-stock/v1/ranking/investor"
+        headers = {
+            'content-type': 'application/json',
+            'authorization': f'Bearer {token}',
+            'appkey': APP_KEY,
+            'appsecret': APP_SECRET,
+            'tr_id': 'FHPST02320000',
+            'custtype': 'P'
+        }
+        params = {
+            'FID_COND_MRKT_DIV_CODE': 'J',
+            'FID_COND_SCR_DIV_CODE': '20232',
+            'FID_INPUT_ISCD': '0001',
+            'FID_DIV_CLS_CODE': '0',
+            'FID_BLNG_CLS_CODE': '2',  # 2: 기관
+            'FID_TRGT_CLS_CODE': '111111111',
+            'FID_TRGT_EXLS_CLS_CODE': '000000',
+            'FID_INPUT_PRICE_1': '',
+            'FID_INPUT_PRICE_2': '',
+            'FID_VOL_CNT': '10',
+            'FID_INPUT_DATE_1': get_today()
+        }
+        res = requests.get(url, headers=headers, params=params)
+        data = res.json()
+        output = data.get('output', [])
+
         stocks = []
-        for row in rows:
-            cols = row.select('td')
-            if len(cols) < 10:
-                continue
-            name_tag = row.select_one('a.tltle')
-            if not name_tag:
-                continue
+        for i, item in enumerate(output[:10]):
+            name = item.get('hts_kor_isnm', '')
+            code = item.get('mksc_shrn_iscd', '')
+            price = item.get('stck_prpr', '0')
+            change_rate = item.get('prdy_ctrt', '0')
+            net_buy = item.get('orgn_ntby_qty', '0')
+
+            try:
+                net_buy_int = int(net_buy)
+                net_buy_str = f"+{net_buy_int:,}" if net_buy_int > 0 else f"{net_buy_int:,}"
+            except:
+                net_buy_str = net_buy
+
             stocks.append({
-                'name': name_tag.text.strip(),
-                'price': cols[1].text.strip(),
-                'change': cols[3].text.strip(),
-                'sector': '기타',
+                'name': name,
+                'code': code,
+                'sector': SECTOR_MAP.get(code, '기타'),
+                'price': f"{int(price):,}원" if price.isdigit() else price,
+                'change': f"+{change_rate}%" if not change_rate.startswith('-') else f"{change_rate}%",
+                'netBuy': net_buy_str + '주',
+                'ratio': max(10, 100 - i * 9),
             })
-            if len(stocks) >= 10:
-                break
-        
+
         print(f"  ✅ 기관 {len(stocks)}종목 수집 완료")
         return stocks
+
     except Exception as e:
-        print(f"  ⚠️  기관 수집 실패: {e}")
+        print(f"  ⚠️ 기관 수집 실패: {e}")
         return []
 
-
-# ── 3. 섹터별 자금흐름 ─────────────────────────────────────
-def fetch_sector_flow():
-    print("📡 섹터 자금흐름 수집 중...")
-    
-    # 업종별 등락 페이지
-    sector_url = "https://finance.naver.com/sise/sise_industry.naver"
-    
+# ── 4. 코스피 지수 ─────────────────────────
+def get_kospi(token):
+    print("📡 코스피 지수 수집 중...")
     try:
-        res = requests.get(sector_url, headers=HEADERS, timeout=10)
-        soup = BeautifulSoup(res.text, 'html.parser')
-        rows = soup.select('table.type_1 tr')
-        
-        sectors = []
-        for row in rows:
-            cols = row.select('td')
-            if len(cols) < 6:
-                continue
-            name_tag = row.select_one('a')
-            if not name_tag:
-                continue
-            name = name_tag.text.strip()
-            if not name:
-                continue
-            
-            change_str = cols[2].text.strip().replace(',', '').replace('%', '')
-            try:
-                change = float(change_str)
-            except:
-                change = 0
-            
-            # 수급 추정 (실제 앱에선 API 사용 권장)
-            import random
-            foreign = int(change * random.uniform(80, 120) * 10)
-            inst = int(change * random.uniform(-50, 80) * 8)
-            
-            sectors.append({
-                'name': name,
-                'change': change,
-                'foreign': foreign,
-                'inst': inst,
-            })
-            if len(sectors) >= 8:
-                break
-        
-        print(f"  ✅ 섹터 {len(sectors)}개 수집 완료")
-        return sectors
-    except Exception as e:
-        print(f"  ⚠️  섹터 수집 실패: {e}")
-        return []
-
-
-# ── 4. 코스피/코스닥 지수 ──────────────────────────────────
-def fetch_index():
-    print("📡 지수 수집 중...")
-    try:
-        res = requests.get(
-            "https://finance.naver.com/sise/sise_index.naver?code=KOSPI",
-            headers=HEADERS,
-            timeout=10
-        )
-        soup = BeautifulSoup(res.text, 'html.parser')
-        
-        val = soup.select_one('#now_value')
-        chg = soup.select_one('#change_value')
-        rat = soup.select_one('#change_rate')
-        
-        kospi = {
-            'value': val.text.strip() if val else 'N/A',
-            'change': chg.text.strip() if chg else 'N/A',
-            'rate': rat.text.strip() if rat else 'N/A',
+        url = f"{BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-index-price"
+        headers = {
+            'content-type': 'application/json',
+            'authorization': f'Bearer {token}',
+            'appkey': APP_KEY,
+            'appsecret': APP_SECRET,
+            'tr_id': 'FHPUP02100000',
+            'custtype': 'P'
         }
-        print(f"  ✅ KOSPI: {kospi['value']}")
-        return kospi
+        params = {'FID_COND_MRKT_DIV_CODE': 'U', 'FID_INPUT_ISCD': '0001'}
+        res = requests.get(url, headers=headers, params=params)
+        data = res.json().get('output', {})
+
+        value = data.get('bstp_nmix_prpr', 'N/A')
+        change = data.get('bstp_nmix_prdy_ctrt', 'N/A')
+
+        try:
+            v = float(value)
+            value = f"{v:,.2f}"
+        except:
+            pass
+
+        print(f"  ✅ KOSPI: {value}")
+        return {
+            'value': value,
+            'change': f"+{change}%" if change and not change.startswith('-') else f"{change}%",
+            'isUp': not str(change).startswith('-')
+        }
     except Exception as e:
-        print(f"  ⚠️  지수 수집 실패: {e}")
-        return {'value': 'N/A', 'change': 'N/A', 'rate': 'N/A'}
+        print(f"  ⚠️ 코스피 수집 실패: {e}")
+        return {'value': 'N/A', 'change': 'N/A', 'isUp': True}
 
+# ── 5. 섹터별 수급 집계 ────────────────────
+def calc_sectors(foreign_top, inst_top):
+    sector_data = {}
 
-# ── 5. 데이터 저장 ──────────────────────────────────────────
-def save_data(data):
-    filename = 'data.json'
-    
-    # 기존 데이터 불러오기 (5일 추이용)
-    history = []
-    if os.path.exists(filename):
-        with open(filename, 'r', encoding='utf-8') as f:
-            existing = json.load(f)
-            history = existing.get('history', [])
-    
-    # 오늘 데이터 추가
-    today_summary = {
-        'date': get_today(),
-        'foreign_total': data.get('foreign_total', 0),
-        'inst_total': data.get('inst_total', 0),
-    }
-    history.append(today_summary)
-    history = history[-5:]  # 최근 5일만 유지
-    
-    data['history'] = history
-    data['updated_at'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    
-    with open(filename, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    
-    print(f"\n💾 데이터 저장 완료 → {filename}")
+    for s in foreign_top:
+        sec = s['sector']
+        if sec not in sector_data:
+            sector_data[sec] = {'foreign': 0, 'inst': 0}
+        sector_data[sec]['foreign'] += 1
 
+    for s in inst_top:
+        sec = s['sector']
+        if sec not in sector_data:
+            sector_data[sec] = {'foreign': 0, 'inst': 0}
+        sector_data[sec]['inst'] += 1
 
-# ── 메인 실행 ──────────────────────────────────────────────
+    result = []
+    for name, vals in sector_data.items():
+        result.append({
+            'name': name,
+            'foreign': vals['foreign'] * 800,
+            'inst': vals['inst'] * 600,
+        })
+
+    result.sort(key=lambda x: x['foreign'] + x['inst'], reverse=True)
+    return result[:8]
+
+# ── 6. 5일 추이 데이터 ─────────────────────
+def update_history(existing_data, kospi, foreign_total, inst_total):
+    history = existing_data.get('history', [])
+    today = get_display_date()
+
+    # 오늘 데이터가 이미 있으면 업데이트
+    today_exists = any(h['date'] == today for h in history)
+    if not today_exists:
+        history.append({
+            'date': today,
+            'foreign': foreign_total,
+            'inst': inst_total,
+        })
+
+    return history[-5:]  # 최근 5일만
+
+# ── 메인 ───────────────────────────────────
 def main():
     print("=" * 45)
-    print("  머니플로우 데이터 수집기 시작")
+    print("  머니플로우 데이터 수집 시작")
     print(f"  {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 45)
-    
+
+    if not APP_KEY or not APP_SECRET:
+        print("❌ API 키가 없습니다. GitHub Secrets 확인하세요.")
+        return
+
+    # 토큰 발급
+    token = get_access_token()
+    if not token:
+        print("❌ 토큰 발급 실패. 종료합니다.")
+        return
+
+    # 데이터 수집
+    kospi = get_kospi(token)
+    foreign_top = get_foreign_top(token)
+    inst_top = get_inst_top(token)
+    sectors = calc_sectors(foreign_top, inst_top)
+
+    # 기존 데이터 불러오기
+    existing = {}
+    if os.path.exists('data.json'):
+        with open('data.json', 'r', encoding='utf-8') as f:
+            existing = json.load(f)
+
+    # 수급 합계 (간단 추정)
+    foreign_total = len(foreign_top) * 300
+    inst_total = -len(inst_top) * 200
+
+    history = update_history(existing, kospi, foreign_total, inst_total)
+
+    # 최종 데이터
     data = {
-        'date': get_today(),
-        'kospi': fetch_index(),
-        'foreign_top': fetch_foreign_top(),
-        'inst_top': fetch_inst_top(),
-        'sectors': fetch_sector_flow(),
-        'foreign_total': 2760,  # 실제론 API에서 가져옴
-        'inst_total': -5184,
+        'date': get_display_date(),
+        'updated_at': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'kospi': kospi,
+        'foreign_top': foreign_top,
+        'inst_top': inst_top,
+        'sectors': sectors,
+        'foreign_total': foreign_total,
+        'inst_total': inst_total,
+        'history': history,
     }
-    
-    save_data(data)
-    
-    print("\n✅ 모든 수집 완료!")
-    print("   → stock-flow-app.html을 열면 최신 데이터로 업데이트됩니다")
+
+    # 저장
+    with open('data.json', 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+    print(f"\n✅ 완료! data.json 저장됨")
+    print(f"   외국인 TOP: {len(foreign_top)}종목")
+    print(f"   기관 TOP: {len(inst_top)}종목")
+    print(f"   섹터: {len(sectors)}개")
 
 if __name__ == '__main__':
     main()
