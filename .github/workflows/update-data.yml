@@ -10,8 +10,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
 
       - name: Python 설정
         uses: actions/setup-python@v4
@@ -31,5 +29,6 @@ jobs:
         run: |
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
-          git add -A
-          git diff --staged --quiet || (git pull --rebase && git commit -m "자동 데이터 업데이트" && git push)
+          git add data.json
+          git diff --staged --quiet || git commit -m "자동 데이터 업데이트"
+          git push --force origin main
