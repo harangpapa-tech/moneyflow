@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>머니플로우 AI</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #080b12;
+    --surface: #0e1220;
+    --surface2: #151a28;
+    --border: #1c2235;
+    --up: #00d48a;
+    --down: #ff3d5a;
+    --foreign: #4da6ff;
+    --inst: #ffb340;
+    --ai: #b06aff;
+    --text: #dde3f0;
+    --text2: #6b7594;
+    --text3: #9aa3bf;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Sans KR', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── TOP BAR ── */
+  .topbar {
+    position: sticky; top: 0; z-index: 200;
+    background: rgba(8,11,18,0.95);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .logo {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px; font-weight: 700;
+    color: var(--foreign);
+    letter-spacing: -0.5px;
+  }
+  .logo em { color: var(--ai); font-style: normal; }
+  .ai-status {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 10px; color: var(--ai);
+    font-family: 'JetBrains Mono', monospace;
+    background: rgba(176,106,255,0.08);
+    border: 1px solid rgba(176,106,255,0.2);
+    padding: 4px 10px; border-radius: 20px;
+  }
+  .ai-dot { width:6px; height:6px; background:var(--ai); border-radius:50%; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+
+  /* ── MARKET TICKER ── */
+  .ticker-wrap { overflow: hidden; background: var(--surface); border-bottom: 1px solid var(--border); }
+  .ticker {
+    display: flex; gap: 0;
+    overflow-x: auto; scrollbar-width: none;
+  }
+  .ticker::-webkit-scrollbar { display: none; }
+  .ticker-item {
+    flex: 0 0 auto; padding: 9px 14px;
+    border-right: 1px solid var(--border);
+  }
+  .t-label { font-size: 9px; color: var(--text2); font-family: 'JetBrains Mono', monospace; margin-bottom: 2px; }
+  .t-val { font-size: 13px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+  .t-chg { font-size: 9px; font-family: 'JetBrains Mono', monospace; }
+  .up { color: var(--up); }
+  .down { color: var(--down); }
+  .neu { color: var(--text3); }
+
+  /* ── TABS ── */
+  .tabs {
+    display: flex; background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto; scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab {
+    flex: 1; min-width: 72px;
+    padding: 11px 6px; text-align: center;
+    font-size: 11px; font-weight: 500;
+    color: var(--text2); cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s; white-space: nowrap;
+  }
+  .tab.active { color: var(--foreign); border-bottom-color: var(--foreign); background: rgba(77,166,255,0.04); }
+  .tab-icon { font-size: 15px; display: block; margin-bottom: 2px; }
+
+  /* ── PAGES ── */
+  .page { display: none; padding: 14px 14px 90px; }
+  .page.active { display: block; }
+
+  /* ── AI ANALYZE BUTTON ── */
+  .analyze-btn {
+    width: 100%; padding: 14px;
+    background: linear-gradient(135deg, rgba(77,166,255,0.12), rgba(176,106,255,0.12));
+    border: 1px solid rgba(176,106,255,0.3);
+    border-radius: 14px;
+    color: var(--text);
+    font-size: 14px; font-weight: 700;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    margin-bottom: 14px;
+    font-family: 'Noto Sans KR', sans-serif;
+    transition: all 0.2s;
+    position: relative; overflow: hidden;
+  }
+  .analyze-btn::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(135deg, rgba(77,166,255,0.08), rgba(176,106,255,0.08));
+    opacity: 0; transition: opacity 0.2s;
+  }
+  .analyze-btn:active::before { opacity: 1; }
+  .analyze-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-spinner {
+    width: 16px; height: 16px;
+    border: 2px solid rgba(176,106,255,0.3);
+    border-top-color: var(--ai);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    display: none;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── RESULT AREA ── */
+  .result-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 14px;
+    min-height: 80px;
+    position: relative;
+    overflow: hidden;
+  }
+  .result-placeholder {
+    color: var(--text2);
+    font-size: 13px;
+    text-align: center;
+    padding: 20px 0;
+    line-height: 1.6;
+  }
+  .result-content { display: none; }
+  .result-content.show { display: block; }
+  .result-header {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .result-badge {
+    font-size: 10px; font-family: 'JetBrains Mono', monospace;
+    background: rgba(176,106,255,0.15);
+    border: 1px solid rgba(176,106,255,0.3);
+    color: var(--ai);
+    padding: 3px 8px; border-radius: 6px;
+  }
+  .result-time { font-size: 10px; color: var(--text2); font-family: 'JetBrains Mono', monospace; margin-left: auto; }
+  .result-text {
+    font-size: 13px; line-height: 1.8;
+    color: var(--text3);
+    white-space: pre-wrap;
+  }
+  .result-text strong { color: var(--text); font-weight: 700; }
+  .typing-cursor {
+    display: inline-block;
+    width: 2px; height: 14px;
+    background: var(--ai);
+    animation: blink 0.8s infinite;
+    vertical-align: middle;
+    margin-left: 2px;
+  }
+  @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0;} }
+
+  /* ── SECTION HEADER ── */
+  .sec-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px; margin-top: 6px;
+  }
+  .sec-title {
+    font-size: 11px; font-weight: 700;
+    color: var(--text2); text-transform: uppercase;
+    letter-spacing: 1.2px; font-family: 'JetBrains Mono', monospace;
+  }
+  .sec-date { font-size: 10px; color: var(--text2); font-family: 'JetBrains Mono', monospace; }
+
+  /* ── TOGGLE ── */
+  .toggle {
+    display: flex; background: var(--surface2);
+    border-radius: 10px; padding: 3px; gap: 2px; margin-bottom: 12px;
+  }
+  .toggle-btn {
+    flex: 1; padding: 8px; text-align: center;
+    font-size: 12px; font-weight: 600;
+    border-radius: 8px; cursor: pointer;
+    transition: all 0.2s; color: var(--text2);
+  }
+  .toggle-btn.active { background: var(--foreign); color: #fff; }
+
+  /* ── STOCK CARDS ── */
+  .stock-list { display: flex; flex-direction: column; gap: 7px; }
+  .stock-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 13px;
+    display: flex; align-items: center; gap: 11px;
+    animation: fadeUp 0.35s ease both;
+  }
+  @keyframes fadeUp { from{opacity:0;transform:translateY(6px);} to{opacity:1;transform:translateY(0);} }
+  .rank {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; color: var(--text2);
+    width: 16px; text-align: center; flex-shrink: 0;
+  }
+  .rank.g { color: #f5c842; }
+  .rank.s { color: #aab0be; }
+  .rank.b { color: #cd7f32; }
+  .sinfo { flex: 1; min-width: 0; }
+  .sname { font-size: 13px; font-weight: 700; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .smeta { display: flex; gap: 6px; align-items: center; }
+  .stag { font-size: 10px; color: var(--text2); background: var(--surface2); padding: 1px 6px; border-radius: 4px; }
+  .sprice { font-size: 10px; color: var(--text2); font-family: 'JetBrains Mono', monospace; }
+  .sright { text-align: right; flex-shrink: 0; }
+  .snet { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; margin-bottom: 4px; }
+  .sbar { width: 72px; height: 3px; background: var(--surface2); border-radius: 2px; overflow: hidden; margin-left: auto; }
+  .sbar-fill { height: 100%; border-radius: 2px; }
+
+  /* ── SECTOR BARS ── */
+  .sector-list { display: flex; flex-direction: column; gap: 8px; }
+  .sector-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 13px;
+    animation: fadeUp 0.35s ease both;
+  }
+  .sector-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 9px; }
+  .sector-name { font-size: 13px; font-weight: 600; }
+  .sector-net { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; }
+  .dbar-row { display: flex; align-items: center; gap: 7px; margin-bottom: 5px; }
+  .dbar-row:last-child { margin-bottom: 0; }
+  .dbar-label { font-size: 9px; color: var(--text2); width: 26px; font-family: 'JetBrains Mono', monospace; }
+  .dbar-track { flex: 1; height: 5px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
+  .dbar-fill { height: 100%; border-radius: 3px; }
+  .dbar-val { font-family: 'JetBrains Mono', monospace; font-size: 9px; width: 52px; text-align: right; }
+
+  /* ── THEME CARDS ── */
+  .theme-list { display: flex; flex-direction: column; gap: 9px; }
+  .theme-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 13px;
+    animation: fadeUp 0.35s ease both;
+    border-left: 3px solid transparent;
+  }
+  .theme-card.hot { border-left-color: var(--down); }
+  .theme-card.warm { border-left-color: var(--inst); }
+  .theme-card.watch { border-left-color: var(--foreign); }
+  .theme-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 7px; }
+  .theme-name { font-size: 13px; font-weight: 700; }
+  .theme-badge { font-size: 10px; padding: 2px 7px; border-radius: 5px; font-family: 'JetBrains Mono', monospace; font-weight: 700; }
+  .hot .theme-badge { background: rgba(255,61,90,0.15); color: var(--down); }
+  .warm .theme-badge { background: rgba(255,179,64,0.15); color: var(--inst); }
+  .watch .theme-badge { background: rgba(77,166,255,0.15); color: var(--foreign); }
+  .theme-desc { font-size: 12px; color: var(--text3); line-height: 1.6; margin-bottom: 9px; }
+  .theme-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+  .theme-tag { font-size: 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: 5px; padding: 2px 7px; font-family: 'JetBrains Mono', monospace; }
+
+  /* ── TREND CHART ── */
+  .trend-list { display: flex; flex-direction: column; gap: 10px; }
+  .trend-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 13px;
+    animation: fadeUp 0.35s ease both;
+  }
+  .trend-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 11px; }
+  .trend-name { font-size: 12px; font-weight: 700; }
+  .trend-val { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; }
+  .mini-bars { display: flex; align-items: flex-end; gap: 5px; height: 48px; }
+  .mbar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; gap: 4px; }
+  .mbar { width: 100%; border-radius: 3px 3px 0 0; min-height: 3px; }
+  .mday { font-size: 8px; color: var(--text2); font-family: 'JetBrains Mono', monospace; }
+
+  /* ── DISCLAIMER ── */
+  .disclaimer {
+    margin: 0 0 14px;
+    padding: 10px 12px;
+    background: rgba(255,61,90,0.04);
+    border: 1px solid rgba(255,61,90,0.12);
+    border-radius: 10px;
+    font-size: 10px; color: var(--text2); line-height: 1.5; text-align: center;
+  }
+
+  /* ── BOTTOM NAV ── */
+  .bottom-nav {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 200;
+    background: rgba(14,18,32,0.97);
+    backdrop-filter: blur(16px);
+    border-top: 1px solid var(--border);
+    display: flex;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .bnav-tab {
+    flex: 1; padding: 9px 4px 8px;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    cursor: pointer; transition: all 0.2s;
+  }
+  .bnav-icon { font-size: 18px; }
+  .bnav-label { font-size: 9px; color: var(--text2); font-weight: 500; }
+  .bnav-tab.active .bnav-label { color: var(--foreign); }
+
+  /* ── INPUT AREA (AI page) ── */
+  .query-input-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 12px;
+    display: flex; gap: 8px; align-items: flex-end;
+    margin-bottom: 12px;
+  }
+  .query-input {
+    flex: 1; background: none; border: none; outline: none;
+    color: var(--text); font-size: 13px;
+    font-family: 'Noto Sans KR', sans-serif;
+    resize: none; min-height: 36px; max-height: 100px;
+    line-height: 1.5;
+  }
+  .query-input::placeholder { color: var(--text2); }
+  .send-btn {
+    width: 34px; height: 34px; border-radius: 10px;
+    background: var(--foreign); border: none;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; flex-shrink: 0; font-size: 14px;
+    transition: all 0.2s;
+  }
+  .send-btn:active { transform: scale(0.92); }
+  .send-btn:disabled { background: var(--surface2); cursor: not-allowed; }
+
+  .quick-btns {
+    display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px;
+  }
+  .quick-btn {
+    font-size: 11px; padding: 6px 11px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px; color: var(--text3);
+    cursor: pointer; transition: all 0.2s;
+    font-family: 'Noto Sans KR', sans-serif;
+  }
+  .quick-btn:active { border-color: var(--foreign); color: var(--foreign); }
+
+  .chat-log { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; }
+  .chat-bubble {
+    padding: 12px 14px; border-radius: 12px;
+    font-size: 13px; line-height: 1.7;
+    animation: fadeUp 0.3s ease both;
+  }
+  .chat-bubble.ai {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text3);
+    border-top-left-radius: 4px;
+  }
+  .chat-bubble.ai strong { color: var(--text); }
+  .chat-bubble.user {
+    background: rgba(77,166,255,0.1);
+    border: 1px solid rgba(77,166,255,0.2);
+    color: var(--text);
+    align-self: flex-end;
+    max-width: 85%;
+    border-top-right-radius: 4px;
+  }
+  .bubble-time { font-size: 9px; color: var(--text2); margin-top: 6px; font-family: 'JetBrains Mono', monospace; }
+
+  .divider { height: 10px; }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="logo">머니플로우 <em>AI</em></div>
+  <div class="ai-status"><div class="ai-dot"></div>AI 연결됨</div>
+</div>
+
+<!-- TICKER -->
+<div class="ticker-wrap">
+  <div class="ticker" id="ticker">
+    <div class="ticker-item"><div class="t-label">KOSPI</div><div class="t-val up">7,384</div><div class="t-chg up">+6.45%</div></div>
+    <div class="ticker-item"><div class="t-label">KOSDAQ</div><div class="t-val up">1,247</div><div class="t-chg up">+2.31%</div></div>
+    <div class="ticker-item"><div class="t-label">외국인</div><div class="t-val up">+2,760억</div><div class="t-chg up">순매수</div></div>
+    <div class="ticker-item"><div class="t-label">기관</div><div class="t-val down">-5,184억</div><div class="t-chg down">순매도</div></div>
+    <div class="ticker-item"><div class="t-label">환율</div><div class="t-val neu">1,342</div><div class="t-chg down">-0.3%</div></div>
+    <div class="ticker-item"><div class="t-label">나스닥</div><div class="t-val up">28,366</div><div class="t-chg up">+1.26%</div></div>
+  </div>
+</div>
+
+<!-- TABS -->
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('top',this)"><span class="tab-icon">🏆</span>순매수TOP</div>
+  <div class="tab" onclick="switchTab('sector',this)"><span class="tab-icon">🗂️</span>섹터흐름</div>
+  <div class="tab" onclick="switchTab('ai',this)"><span class="tab-icon">🤖</span>AI분석</div>
+  <div class="tab" onclick="switchTab('trend',this)"><span class="tab-icon">📈</span>5일추이</div>
+</div>
+
+<!-- ──────────────────────────────────────── -->
+<!-- PAGE 1: 순매수 TOP -->
+<!-- ──────────────────────────────────────── -->
+<div class="page active" id="page-top">
+  <div class="divider"></div>
+  <div class="toggle">
+    <div class="toggle-btn active" onclick="switchList('foreign',this)">🌍 외국인</div>
+    <div class="toggle-btn" onclick="switchList('inst',this)">🏦 기관</div>
+  </div>
+  <div class="sec-header">
+    <div class="sec-title">순매수 TOP 10</div>
+    <div class="sec-date" id="top-date">2026.05.06</div>
+  </div>
+  <div class="stock-list" id="stock-list"></div>
+
+  <div class="divider"></div>
+  <button class="analyze-btn" onclick="analyzeTopStocks()">
+    <div class="btn-spinner" id="top-spinner"></div>
+    <span id="top-btn-text">🤖 AI가 수급 의미 분석하기</span>
+  </button>
+  <div class="result-box" id="top-result">
+    <div class="result-placeholder">버튼을 누르면 AI가 오늘 수급의 의미와<br>내일 전략을 분석해드려요</div>
+    <div class="result-content" id="top-result-content">
+      <div class="result-header">
+        <div class="result-badge">AI ANALYSIS</div>
+        <div class="result-time" id="top-result-time"></div>
+      </div>
+      <div class="result-text" id="top-result-text"></div>
+    </div>
+  </div>
+  <div class="disclaimer">⚠️ AI 분석은 참고용이며 투자 손실의 책임은 본인에게 있습니다</div>
+</div>
+
+<!-- ──────────────────────────────────────── -->
+<!-- PAGE 2: 섹터 흐름 -->
+<!-- ──────────────────────────────────────── -->
+<div class="page" id="page-sector">
+  <div class="divider"></div>
+  <div class="sec-header">
+    <div class="sec-title">섹터별 자금흐름</div>
+    <div class="sec-date">2026.05.06</div>
+  </div>
+  <div class="sector-list" id="sector-list"></div>
+
+  <div class="divider"></div>
+  <button class="analyze-btn" onclick="analyzeSectors()">
+    <div class="btn-spinner" id="sector-spinner"></div>
+    <span id="sector-btn-text">🤖 AI가 섹터 로테이션 분석하기</span>
+  </button>
+  <div class="result-box" id="sector-result">
+    <div class="result-placeholder">섹터별 자금흐름을 AI가 분석하고<br>다음날 유망 섹터를 예측합니다</div>
+    <div class="result-content" id="sector-result-content">
+      <div class="result-header">
+        <div class="result-badge">SECTOR ANALYSIS</div>
+        <div class="result-time" id="sector-result-time"></div>
+      </div>
+      <div class="result-text" id="sector-result-text"></div>
+    </div>
+  </div>
+  <div class="disclaimer">⚠️ AI 분석은 참고용이며 투자 손실의 책임은 본인에게 있습니다</div>
+</div>
+
+<!-- ──────────────────────────────────────── -->
+<!-- PAGE 3: AI 분석 채팅 -->
+<!-- ──────────────────────────────────────── -->
+<div class="page" id="page-ai">
+  <div class="divider"></div>
+
+  <div class="quick-btns">
+    <div class="quick-btn" onclick="quickAsk('내일 주목 테마 알려줘')">🔥 내일 주목 테마</div>
+    <div class="quick-btn" onclick="quickAsk('외국인이 오늘 왜 이렇게 많이 샀어?')">🌍 외국인 분석</div>
+    <div class="quick-btn" onclick="quickAsk('반도체 지금 들어가도 돼?')">💡 반도체 진입?</div>
+    <div class="quick-btn" onclick="quickAsk('지금 팔아야 할 섹터는?')">📉 매도 타이밍</div>
+    <div class="quick-btn" onclick="quickAsk('코스피 7천 이후 전망은?')">📊 코스피 전망</div>
+  </div>
+
+  <div class="chat-log" id="chat-log"></div>
+
+  <div class="query-input-wrap">
+    <textarea class="query-input" id="query-input" placeholder="수급에 대해 무엇이든 물어보세요..." rows="1"
+      onkeydown="handleKey(event)"
+      oninput="autoResize(this)"></textarea>
+    <button class="send-btn" id="send-btn" onclick="sendQuery()">➤</button>
+  </div>
+
+  <div class="disclaimer">⚠️ AI 분석은 참고용이며 투자 손실의 책임은 본인에게 있습니다</div>
+</div>
+
+<!-- ──────────────────────────────────────── -->
+<!-- PAGE 4: 5일 추이 -->
+<!-- ──────────────────────────────────────── -->
+<div class="page" id="page-trend">
+  <div class="divider"></div>
+  <div class="sec-header">
+    <div class="sec-title">최근 5일 수급추이</div>
+  </div>
+  <div class="trend-list" id="trend-list"></div>
+
+  <div class="divider"></div>
+  <button class="analyze-btn" onclick="analyzeTrend()">
+    <div class="btn-spinner" id="trend-spinner"></div>
+    <span id="trend-btn-text">🤖 AI가 5일 추이 패턴 분석하기</span>
+  </button>
+  <div class="result-box" id="trend-result">
+    <div class="result-placeholder">5일간 수급 흐름의 패턴을 분석하고<br>다음 방향을 예측합니다</div>
+    <div class="result-content" id="trend-result-content">
+      <div class="result-header">
+        <div class="result-badge">TREND ANALYSIS</div>
+        <div class="result-time" id="trend-result-time"></div>
+      </div>
+      <div class="result-text" id="trend-result-text"></div>
+    </div>
+  </div>
+  <div class="disclaimer">⚠️ AI 분석은 참고용이며 투자 손실의 책임은 본인에게 있습니다</div>
+</div>
+
+<script>
+// ─────────────────────────────────────────
+// DATA
+// ─────────────────────────────────────────
+const foreignTop = [
+  { name:'SK하이닉스', sector:'반도체', price:'1,438,000원', netBuy:'+4,821억', ratio:95, change:'+10.16%' },
+  { name:'삼성전자', sector:'반도체', price:'98,400원', netBuy:'+3,204억', ratio:80, change:'+10.11%' },
+  { name:'LG에너지솔루션', sector:'2차전지', price:'412,000원', netBuy:'+1,892억', ratio:65, change:'+5.43%' },
+  { name:'POSCO홀딩스', sector:'철강', price:'489,500원', netBuy:'+987억', ratio:50, change:'+3.21%' },
+  { name:'현대차', sector:'자동차', price:'238,000원', netBuy:'+845억', ratio:44, change:'+2.87%' },
+  { name:'KB금융', sector:'금융', price:'112,000원', netBuy:'+732억', ratio:38, change:'+4.12%' },
+  { name:'NAVER', sector:'IT', price:'248,000원', netBuy:'+621억', ratio:32, change:'+2.34%' },
+  { name:'두산에너빌리티', sector:'원전', price:'42,150원', netBuy:'+589억', ratio:29, change:'+8.92%' },
+  { name:'한화에어로', sector:'방산', price:'1,124,000원', netBuy:'+412억', ratio:22, change:'+1.80%' },
+  { name:'SK스퀘어', sector:'지주', price:'132,000원', netBuy:'+318억', ratio:16, change:'+6.24%' },
+];
+const instTop = [
+  { name:'KODEX 레버리지', sector:'ETF', price:'28,450원', netBuy:'+2,341억', ratio:90, change:'+12.3%' },
+  { name:'삼성바이오로직스', sector:'바이오', price:'1,892,000원', netBuy:'+1,102억', ratio:70, change:'+3.45%' },
+  { name:'카카오', sector:'IT', price:'42,100원', netBuy:'+892억', ratio:58, change:'+4.21%' },
+  { name:'HD현대중공업', sector:'조선', price:'387,500원', netBuy:'+781억', ratio:52, change:'+11.28%' },
+  { name:'셀트리온', sector:'바이오', price:'198,500원', netBuy:'+654억', ratio:44, change:'+2.11%' },
+  { name:'기아', sector:'자동차', price:'118,500원', netBuy:'+542억', ratio:38, change:'+1.93%' },
+  { name:'LG화학', sector:'화학', price:'312,000원', netBuy:'+423억', ratio:30, change:'+2.67%' },
+  { name:'한국전력', sector:'유틸리티', price:'28,750원', netBuy:'+312억', ratio:22, change:'+5.34%' },
+  { name:'SK텔레콤', sector:'통신', price:'62,400원', netBuy:'+221억', ratio:16, change:'+1.12%' },
+  { name:'롯데케미칼', sector:'화학', price:'98,200원', netBuy:'+187억', ratio:12, change:'+3.88%' },
+];
+const sectors = [
+  { name:'반도체', foreign:8025, inst:-1240 },
+  { name:'2차전지', foreign:2341, inst:892 },
+  { name:'방산/원전', foreign:1892, inst:1102 },
+  { name:'조선', foreign:1204, inst:781 },
+  { name:'바이오', foreign:-342, inst:1756 },
+  { name:'금융', foreign:892, inst:-432 },
+  { name:'자동차', foreign:845, inst:542 },
+  { name:'IT/플랫폼', foreign:621, inst:892 },
+];
+const trends = [
+  { name:'외국인 순매수', color:'#4da6ff', days:['4/30','5/1','5/2','5/4','5/6'], vals:[1240,-320,890,2100,2760] },
+  { name:'기관 순매수', color:'#ffb340', days:['4/30','5/1','5/2','5/4','5/6'], vals:[320,1100,-890,-2400,-5184] },
+  { name:'반도체 수급', color:'#00d48a', days:['4/30','5/1','5/2','5/4','5/6'], vals:[2100,1800,3200,5400,8025] },
+];
+
+// ─────────────────────────────────────────
+// RENDER
+// ─────────────────────────────────────────
+let currentList = 'foreign';
+
+function renderStocks(type) {
+  const data = type === 'foreign' ? foreignTop : instTop;
+  const color = type === 'foreign' ? 'var(--foreign)' : 'var(--inst)';
+  document.getElementById('stock-list').innerHTML = data.map((s,i) => `
+    <div class="stock-card" style="animation-delay:${i*0.04}s">
+      <div class="rank ${i===0?'g':i===1?'s':i===2?'b':''}">#${i+1}</div>
+      <div class="sinfo">
+        <div class="sname">${s.name}</div>
+        <div class="smeta">
+          <div class="stag">${s.sector}</div>
+          <div class="sprice">${s.price}</div>
+          <div class="sprice" style="color:${s.change.startsWith('+')?'var(--up)':'var(--down)'}">${s.change}</div>
+        </div>
+      </div>
+      <div class="sright">
+        <div class="snet" style="color:${color}">${s.netBuy}</div>
+        <div class="sbar"><div class="sbar-fill" style="width:${s.ratio}%;background:${color}"></div></div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderSectors() {
+  const maxVal = Math.max(...sectors.map(s=>Math.max(Math.abs(s.foreign),Math.abs(s.inst))));
+  document.getElementById('sector-list').innerHTML = sectors.map((s,i) => {
+    const total = s.foreign + s.inst;
+    const fW = Math.abs(s.foreign)/maxVal*100;
+    const iW = Math.abs(s.inst)/maxVal*100;
+    const fC = s.foreign>=0?'var(--foreign)':'var(--down)';
+    const iC = s.inst>=0?'var(--inst)':'var(--down)';
+    const tC = total>=0?'var(--up)':'var(--down)';
+    return `
+      <div class="sector-card" style="animation-delay:${i*0.05}s">
+        <div class="sector-top">
+          <div class="sector-name">${s.name}</div>
+          <div class="sector-net" style="color:${tC}">${total>=0?'+':''}${total.toLocaleString()}억</div>
+        </div>
+        <div class="dbar-row">
+          <div class="dbar-label" style="color:var(--foreign)">외국인</div>
+          <div class="dbar-track"><div class="dbar-fill" style="width:${fW}%;background:${fC}"></div></div>
+          <div class="dbar-val" style="color:${fC}">${s.foreign>=0?'+':''}${s.foreign.toLocaleString()}억</div>
+        </div>
+        <div class="dbar-row">
+          <div class="dbar-label" style="color:var(--inst)">기관</div>
+          <div class="dbar-track"><div class="dbar-fill" style="width:${iW}%;background:${iC}"></div></div>
+          <div class="dbar-val" style="color:${iC}">${s.inst>=0?'+':''}${s.inst.toLocaleString()}억</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderTrends() {
+  document.getElementById('trend-list').innerHTML = trends.map((t,ti) => {
+    const maxAbs = Math.max(...t.vals.map(v=>Math.abs(v)));
+    const bars = t.vals.map((v,i) => {
+      const h = Math.abs(v)/maxAbs*42;
+      const col = v>=0?t.color:'var(--down)';
+      return `<div class="mbar-wrap"><div class="mbar" style="height:${h}px;background:${col};opacity:${0.45+i*0.13}"></div><div class="mday">${t.days[i]}</div></div>`;
+    }).join('');
+    const lastV = t.vals[t.vals.length-1];
+    const tC = lastV>=0?'var(--up)':'var(--down)';
+    return `
+      <div class="trend-card" style="animation-delay:${ti*0.07}s">
+        <div class="trend-top">
+          <div class="trend-name">${t.name}</div>
+          <div class="trend-val" style="color:${tC}">${lastV>=0?'+':''}${lastV.toLocaleString()}억</div>
+        </div>
+        <div class="mini-bars">${bars}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ─────────────────────────────────────────
+// NAVIGATION
+// ─────────────────────────────────────────
+function switchTab(page, el) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('page-'+page).classList.add('active');
+  el.classList.add('active');
+  window.scrollTo(0,0);
+}
+function switchList(type, el) {
+  currentList = type;
+  document.querySelectorAll('.toggle-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  renderStocks(type);
+}
+
+// ─────────────────────────────────────────
+// CLAUDE API
+// ─────────────────────────────────────────
+const MARKET_CONTEXT = `
+현재 한국 주식시장 데이터 (2026년 5월 6일 기준):
+- KOSPI: 7,384 (+6.45%) — 사상 최고치 경신
+- KOSDAQ: 1,247 (+2.31%)
+- 외국인 순매수: +2,760억 (유가증권시장)
+- 기관 순매도: -5,184억
+- 환율: 1,342원
+
+외국인 순매수 TOP: SK하이닉스(+4,821억), 삼성전자(+3,204억), LG에너지솔루션(+1,892억), POSCO홀딩스(+987억), 현대차(+845억)
+기관 순매수 TOP: KODEX레버리지(+2,341억), 삼성바이오(+1,102억), 카카오(+892억), HD현대중공업(+781억)
+
+섹터별 외국인+기관 합산:
+- 반도체: +6,785억 (외국인 +8,025, 기관 -1,240)
+- 2차전지: +3,233억
+- 방산/원전: +2,994억
+- 조선: +1,985억
+- 바이오: +1,414억 (기관 주도)
+
+5일 외국인 추이: +1,240억 → -320억 → +890억 → +2,100억 → +2,760억 (강한 상승)
+5일 기관 추이: +320억 → +1,100억 → -890억 → -2,400억 → -5,184억 (강한 매도)
+
+배경: 코스피 사상 최고치, SK하이닉스 ADR 상장 기대, 엔비디아 실적 호조, 이란 협상 기대감
+`;
+
+async function callClaude(userMsg, systemMsg) {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1000,
+      system: systemMsg,
+      messages: [{ role: 'user', content: userMsg }]
+    })
+  });
+  if (!res.ok) throw new Error('API 오류');
+  const data = await res.json();
+  return data.content[0].text;
+}
+
+function formatText(text) {
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/^#{1,3}\s+(.+)$/gm, '<strong>$1</strong>')
+    .replace(/^[-•]\s+/gm, '• ');
+}
+
+async function showAnalysis(btnId, spinnerId, resultId, contentId, timeId, textId, prompt) {
+  const btn = document.getElementById(btnId);
+  const spinner = document.getElementById(spinnerId);
+  const result = document.getElementById(resultId);
+  const content = document.getElementById(contentId);
+  const timeEl = document.getElementById(timeId);
+  const textEl = document.getElementById(textId);
+  const placeholder = result.querySelector('.result-placeholder');
+
+  btn.disabled = true;
+  spinner.style.display = 'block';
+  placeholder && (placeholder.style.display = 'none');
+  content.classList.remove('show');
+  textEl.innerHTML = '<span class="typing-cursor"></span>';
+  content.classList.add('show');
+
+  try {
+    const systemPrompt = `당신은 한국 주식시장 전문 애널리스트입니다. 외국인·기관 수급 데이터를 분석하여 핵심만 간결하게 설명합니다. 이모지를 적절히 사용하고 줄바꿈으로 가독성을 높이세요. **볼드**로 핵심 키워드를 강조하세요. 반드시 한국어로 답하세요. 투자 조언이 아닌 분석 정보임을 명심하세요.`;
+    const text = await callClaude(MARKET_CONTEXT + '\n\n' + prompt, systemPrompt);
+    timeEl.textContent = new Date().toLocaleTimeString('ko-KR', {hour:'2-digit',minute:'2-digit'});
+    textEl.innerHTML = formatText(text);
+  } catch(e) {
+    textEl.innerHTML = '⚠️ 분석 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
+  } finally {
+    btn.disabled = false;
+    spinner.style.display = 'none';
+  }
+}
+
+function analyzeTopStocks() {
+  const type = currentList === 'foreign' ? '외국인' : '기관';
+  showAnalysis(
+    'top-btn-text', 'top-spinner', 'top-result', 'top-result-content', 'top-result-time', 'top-result-text',
+    `오늘 ${type} 순매수 TOP 종목들을 분석해주세요. 왜 이 종목들을 샀는지, 이 수급의 의미, 그리고 내일 전략을 300자 이내로 간결하게 알려주세요.`
+  );
+}
+function analyzeSectors() {
+  showAnalysis(
+    'sector-btn-text', 'sector-spinner', 'sector-result', 'sector-result-content', 'sector-result-time', 'sector-result-text',
+    `오늘 섹터별 자금흐름을 분석해주세요. 어느 섹터로 돈이 몰리고 있는지, 섹터 로테이션 패턴, 내일 유망 섹터를 300자 이내로 알려주세요.`
+  );
+}
+function analyzeTrend() {
+  showAnalysis(
+    'trend-btn-text', 'trend-spinner', 'trend-result', 'trend-result-content', 'trend-result-time', 'trend-result-text',
+    `최근 5일 외국인·기관 수급 추이를 분석해주세요. 패턴의 의미와 이후 방향성 예측을 300자 이내로 알려주세요.`
+  );
+}
+
+// ─────────────────────────────────────────
+// CHAT (AI 탭)
+// ─────────────────────────────────────────
+const chatHistory = [];
+
+function addBubble(text, role) {
+  const log = document.getElementById('chat-log');
+  const time = new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+  const div = document.createElement('div');
+  div.className = `chat-bubble ${role}`;
+  div.innerHTML = `${role==='ai'?formatText(text):text}<div class="bubble-time">${time}</div>`;
+  log.appendChild(div);
+  div.scrollIntoView({behavior:'smooth', block:'end'});
+  return div;
+}
+
+async function sendQuery() {
+  const input = document.getElementById('query-input');
+  const sendBtn = document.getElementById('send-btn');
+  const text = input.value.trim();
+  if (!text) return;
+
+  input.value = '';
+  input.style.height = 'auto';
+  sendBtn.disabled = true;
+
+  addBubble(text, 'user');
+  chatHistory.push({role:'user', content: MARKET_CONTEXT + '\n\n질문: ' + text});
+
+  const thinkingDiv = addBubble('<span class="typing-cursor"></span>', 'ai');
+
+  try {
+    const systemPrompt = `당신은 한국 주식시장 수급 전문 AI 어시스턴트입니다. 외국인·기관 자금흐름 데이터를 바탕으로 투자자의 질문에 명확하고 실용적으로 답합니다. 이모지 적절히 사용, **볼드**로 핵심 강조, 400자 이내로 간결하게. 한국어로만 답하세요. 투자 손실 책임은 본인에게 있다는 점을 항상 인지하고 분석 정보를 제공하세요.`;
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        system: systemPrompt,
+        messages: chatHistory
+      })
+    });
+    const data = await res.json();
+    const reply = data.content[0].text;
+    thinkingDiv.innerHTML = formatText(reply) + `<div class="bubble-time">${new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})}</div>`;
+    chatHistory.push({role:'assistant', content: reply});
+    thinkingDiv.scrollIntoView({behavior:'smooth', block:'end'});
+  } catch(e) {
+    thinkingDiv.innerHTML = '⚠️ 오류가 발생했습니다. 다시 시도해주세요.';
+  } finally {
+    sendBtn.disabled = false;
+    input.focus();
+  }
+}
+
+function quickAsk(text) {
+  document.getElementById('query-input').value = text;
+  sendQuery();
+}
+
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendQuery();
+  }
+}
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 100) + 'px';
+}
+
+// ─────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────
+renderStocks('foreign');
+renderSectors();
+renderTrends();
+
+// 환영 메시지
+setTimeout(() => {
+  addBubble('안녕하세요! 👋\n\n오늘 **코스피 7,384** 사상 최고치를 기록했어요.\n\n외국인이 반도체에 **8,025억** 집중 매수했고, 기관은 -5,184억 순매도 중입니다.\n\n궁금한 것 무엇이든 물어보세요! 빠른 질문은 위 버튼을 눌러보세요 😊', 'ai');
+}, 300);
+</script>
+</body>
+</html>
