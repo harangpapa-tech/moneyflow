@@ -23,14 +23,12 @@ jobs:
         env:
           KIS_APP_KEY: ${{ secrets.KIS_APP_KEY }}
           KIS_APP_SECRET: ${{ secrets.KIS_APP_SECRET }}
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          GH_REPO: harangpapa-tech/moneyflow
         run: python collector.py
 
       - name: 변경사항 저장
         run: |
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
-          git add -A
+          git add data.json
           git diff --staged --quiet || git commit -m "자동 데이터 업데이트"
           git push --force origin main
