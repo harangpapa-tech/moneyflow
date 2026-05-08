@@ -23,6 +23,8 @@ jobs:
         env:
           KIS_APP_KEY: ${{ secrets.KIS_APP_KEY }}
           KIS_APP_SECRET: ${{ secrets.KIS_APP_SECRET }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_REPO: harangpapa-tech/moneyflow
         run: python collector.py
 
       - name: 변경사항 저장
